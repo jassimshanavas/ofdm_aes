@@ -1,0 +1,63 @@
+<!-- <!DOCTYPE html>
+<html>
+  <head>
+    <title>OFDM Transmitter - Result</title>
+  </head>
+  <body>
+    <h1>OFDM Transmitter - Result</h1>
+    <p>Transmitted Signal: {{ transmitted_signal }}</p>
+    <p>Encrypted Signal: {{ encrypted_signal }}</p>
+    <p>Decrypted Signal: {{ decrypted_signal }}</p>
+  </body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>OFDM Transmitter - Result</title>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f1f1f1;
+      }
+
+      .result-container {
+        width: 400px;
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 20px;
+        background-color: #fff;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        text-align: center;
+      }
+
+      h1 {
+        margin-bottom: 20px;
+      }
+
+      h2 {
+        font-size: 18px;
+        margin-bottom: 10px;
+      }
+
+      p {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="result-container">
+      <h1>OFDM Transmitter - Result</h1>
+      <h2>Transmitted Signal:</h2>
+      <p>{{ transmitted_signal }}</p>
+      <h2>Encrypted Signal:</h2>
+      <p>{{ encrypted_signal }}</p>
+      <h2>Decrypted Signal:</h2>
+      <p>{{ decrypted_signal }}</p>
+    </div>
+  </body>
+</html>

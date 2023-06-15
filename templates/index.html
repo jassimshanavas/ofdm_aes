@@ -1,0 +1,82 @@
+<!-- <!DOCTYPE html>
+<html>
+  <head>
+    <title>OFDM Transmitter</title>
+  </head>
+  <body>
+    <h1>OFDM Transmitter</h1>
+    <form method="POST" action="/">
+      <label for="data">Data:</label>
+      <input type="text" name="data" id="data" required><br><br>
+      <label for="fft_size">FFT Size:</label>
+      <input type="number" name="fft_size" id="fft_size" required><br><br>
+      <label for="cyclic_prefix">Cyclic Prefix:</label>
+      <input type="number" name="cyclic_prefix" id="cyclic_prefix" required><br><br>
+      <input type="submit" value="Submit">
+    </form>
+  </body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>OFDM Transmitter</title>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f1f1f1;
+      }
+
+      form {
+        width: 400px;
+        padding: 20px;
+        background-color: #fff;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        text-align: center;
+      }
+
+      h1 {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 10px;
+      }
+
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+      }
+
+      input[type="submit"] {
+        background-color: #4caf50;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <form method="POST" action="/">
+      <h1>OFDM Transmitter</h1>
+      <label for="data">Data:</label>
+      <input type="text" name="data" id="data" required><br><br>
+      <label for="fft_size">FFT Size:</label>
+      <input type="number" name="fft_size" id="fft_size" required><br><br>
+      <label for="cyclic_prefix">Cyclic Prefix:</label>
+      <input type="number" name="cyclic_prefix" id="cyclic_prefix" required><br><br>
+      <input type="submit" value="Submit">
+    </form>
+  </body>
+</html>
