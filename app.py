@@ -92,6 +92,7 @@ def index():
         data = np.array(list(map(int, request.form['data'].split(','))))
         fft_size = int(request.form['fft_size'])
         cyclic_prefix = int(request.form['cyclic_prefix'])
+        key = b'16-byte secret!!'  # The key should be 16, 24, or 32 bytes long
 
         transmitted_signal = ofdm_transmitter(data, fft_size, cyclic_prefix)
         encrypted_signal = encrypt_signal(transmitted_signal, key)
@@ -105,5 +106,5 @@ def index():
     return render_template('index.html')
 
 if __name__ == '__main__':
-    key = b'16-byte secret!!'  # The key should be 16, 24, or 32 bytes long
+    # key = b'16-byte secret!!'  # The key should be 16, 24, or 32 bytes long
     app.run(debug=True)
