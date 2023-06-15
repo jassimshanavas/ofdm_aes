@@ -1,16 +1,3 @@
-<!-- <!DOCTYPE html>
-<html>
-  <head>
-    <title>OFDM Transmitter - Result</title>
-  </head>
-  <body>
-    <h1>OFDM Transmitter - Result</h1>
-    <p>Transmitted Signal: {{ transmitted_signal }}</p>
-    <p>Encrypted Signal: {{ encrypted_signal }}</p>
-    <p>Decrypted Signal: {{ decrypted_signal }}</p>
-  </body>
-</html> -->
-
 
 <!DOCTYPE html>
 <html>
@@ -22,21 +9,29 @@
         justify-content: center;
         align-items: center;
         height: 100vh;
-        background-color: #f1f1f1;
+        /* background-color: #f1f1f1; */
+        /* background-image: linear-gradient(to bottom, #00b09b, #96c93d); */
+        background-color: #00DBDE;
+        background-image: linear-gradient(90deg, #00DBDE 0%, #FC00FF 100%);
+
       }
 
       .result-container {
-        width: 400px;
-        max-height: 400px;
+        /* width: 400px; */
+        width: 80%;
+        /* max-height: 400px; */
+        max-height: 90%;
         overflow-y: auto;
         padding: 20px;
         background-color: #fff;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        border-radius: 20px;
         text-align: center;
       }
 
       h1 {
         margin-bottom: 20px;
+        /* color:  #FC00FF; */
       }
 
       h2 {
@@ -51,7 +46,8 @@
   </head>
   <body>
     <div class="result-container">
-      <h1>OFDM Transmitter - Result</h1>
+      <!-- <h1>OFDM Transmitter - Result</h1> -->
+      <h1>Results</h1>
       <h2>Transmitted Signal:</h2>
       <p>{{ transmitted_signal }}</p>
       <h2>Encrypted Signal:</h2>
