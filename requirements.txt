@@ -2,3 +2,7 @@ flask
 gunicorn
 cryptography
 scipy
+numpy
+matplotlib
+
+
