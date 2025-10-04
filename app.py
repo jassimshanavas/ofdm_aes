@@ -1,257 +1,296 @@
-from flask import Flask, render_template, request
-import numpy as np
-import matplotlib
-
-matplotlib.use('Agg')  # Use Agg backend for non-blocking GUI operations
-
-import matplotlib.pyplot as plt
-from scipy.fftpack import fft, ifft
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.backends import default_backend
-from cryptography.fernet import Fernet
-import os
+from flask import Flask, render_template, request, jsonify, send_file
+import json
+import sys
+from io import StringIO, BytesIO
+import traceback
 import base64
-
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 app = Flask(__name__)
 
-def ofdm_transmitter(data, fft_size, cyclic_prefix):
-    # Pad the data to match the FFT size
-    padded_data = np.concatenate((data, np.zeros(fft_size - len(data))))
+# Store workflow state
+workflows = {}
+execution_contexts = {}
 
-    # Perform the FFT
-    frequency_domain = fft(padded_data)
-
-    # Add a cyclic prefix
-    prefix = frequency_domain[-cyclic_prefix:]
-    frequency_domain_with_prefix = np.concatenate((prefix, frequency_domain))
-
-    # Perform the inverse FFT
-    time_domain = ifft(frequency_domain_with_prefix)
-
-    # Return the time domain signal
-    return time_domain
-
-def add_awgn_noise(signal, snr_dB):
-    # Calculate the signal power
-    signal_power = np.sum(np.abs(signal)**2) / len(signal)
-
-    # Calculate the noise power
-    noise_power = signal_power / (10**(snr_dB / 10))
-
-    # Generate AWGN noise
-    noise = np.sqrt(noise_power/2) * (np.random.randn(len(signal)) + 1j*np.random.randn(len(signal)))
-
-    # Add noise to the signal
-    noisy_signal = signal + noise
-
-    return noisy_signal
-
-def encrypt_signal(signal, key):
-    # Generate a random initialization vector (IV)
-    iv = os.urandom(16)
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    encryptor = cipher.encryptor()
-
-    # Convert the signal to bytes
-    signal_bytes = signal.tobytes()
-
-    # Pad the signal to match the block size of AES
-    padder = padding.PKCS7(128).padder()
-    padded_data = padder.update(signal_bytes) + padder.finalize()
-
-    # Encrypt the padded signal
-    encrypted_signal = encryptor.update(padded_data) + encryptor.finalize()
-
-    # Combine the IV and encrypted signal
-    encrypted_signal_with_iv = iv + encrypted_signal
-
-    # Base64 encode the result for safe transmission
-    encoded_signal = base64.b64encode(encrypted_signal_with_iv)
-    return encoded_signal.decode()
-
-def decrypt_signal(encoded_signal, key):
-    # Decode the Base64 encoded signal
-    encrypted_signal_with_iv = base64.b64decode(encoded_signal)
-
-    # Extract the IV from the encrypted signal
-    iv = encrypted_signal_with_iv[:16]
-
-    # Create a cipher object with the provided key and IV
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    decryptor = cipher.decryptor()
-
-    # Decrypt the encrypted signal
-    decrypted_signal = decryptor.update(encrypted_signal_with_iv[16:]) + decryptor.finalize()
-
-    # Remove padding from the decrypted signal
-    unpadder = padding.PKCS7(128).unpadder()
-    unpadded_signal = unpadder.update(decrypted_signal) + unpadder.finalize()
-
-    # Convert the signal back to a complex numpy array
-    signal = np.frombuffer(unpadded_signal, dtype=np.complex128)
-
-    return signal
-
-def ofdm_receiver(received_signal, fft_size, cyclic_prefix, data):
-    # Perform the FFT on the received signal
-    frequency_domain_with_prefix = fft(received_signal)
-    
-    # Remove the cyclic prefix
-    frequency_domain = frequency_domain_with_prefix[cyclic_prefix:]
-    
-    # Perform the inverse FFT
-    time_domain = ifft(frequency_domain)
-    
-    # Discard the padding
-    transmitted_data = np.round(time_domain.real[:len(data)]).astype(int)
-    
-    # Return the transmitted data
-    return transmitted_data
-
-def add_awgn_noise_to_encrypted_signal(encrypted_signal, snr_dB):
-    # Decode the Base64 encoded encrypted signal
-    encrypted_signal_with_iv = base64.b64decode(encrypted_signal)
-
-    # Extract the IV from the encrypted signal
-    iv = encrypted_signal_with_iv[:16]
-
-    # Create a cipher object with a dummy key and IV
-    cipher = Cipher(algorithms.AES(b'16-byte secret!!'), modes.CBC(iv), backend=default_backend())
-    dummy_decryptor = cipher.decryptor()
-
-    # Decrypt the encrypted signal without removing padding
-    decrypted_signal_with_padding = dummy_decryptor.update(encrypted_signal_with_iv[16:]) + dummy_decryptor.finalize()
-
-    # Convert the signal back to a complex numpy array
-    signal = np.frombuffer(decrypted_signal_with_padding, dtype=np.complex128)
-
-    # Add AWGN noise to the signal
-    noisy_signal = add_awgn_noise(signal, snr_dB)
-
-    # Pad the noisy signal to match the block size of AES
-    padder = padding.PKCS7(128).padder()
-    padded_data = padder.update(noisy_signal.tobytes()) + padder.finalize()
-
-    # Encrypt the padded noisy signal
-    encryptor = cipher.encryptor()
-    encrypted_noisy_signal = encryptor.update(padded_data) + encryptor.finalize()
-
-    # Combine the IV and encrypted noisy signal
-    encrypted_noisy_signal_with_iv = iv + encrypted_noisy_signal
-
-    # Base64 encode the result for safe transmission
-    encoded_noisy_signal = base64.b64encode(encrypted_noisy_signal_with_iv)
-
-    return encoded_noisy_signal.decode()
-
-def decrypt_noisy_signal(noisy_encrypted_signal, key):
-    # Decode the Base64 encoded noisy encrypted signal
-    encrypted_noisy_signal_with_iv = base64.b64decode(noisy_encrypted_signal)
-
-    # Extract the IV from the noisy encrypted signal
-    iv = encrypted_noisy_signal_with_iv[:16]
-
-    # Create a cipher object with the provided key and IV
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    decryptor = cipher.decryptor()
-
-    # Decrypt the noisy encrypted signal
-    decrypted_noisy_signal = decryptor.update(encrypted_noisy_signal_with_iv[16:]) + decryptor.finalize()
-
-    # Remove padding from the decrypted noisy signal
-    unpadder = padding.PKCS7(128).unpadder()
-    unpadded_noisy_signal = unpadder.update(decrypted_noisy_signal) + unpadder.finalize()
-
-    # Convert the noisy signal back to a complex numpy array
-    signal = np.frombuffer(unpadded_noisy_signal, dtype=np.complex128)
-
-    return signal
-
-
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        # Retrieve form data
-        data_str = request.form['data'].strip()
-        data = np.array([float(val) for val in data_str.split(',')])
+    return render_template('workflow.html')
 
-        fft_size = int(request.form['fft_size'])
-        cyclic_prefix = int(request.form['cyclic_prefix'])
-        # key = Fernet.generate_key()
-        key = b'16-byte secret!!' 
-        snr_dB = int(request.form['snr_dB'])
-        noise_length = len(data)  # Length of the noise (same as the data length)
-        noise_power = 1 / (10 ** (snr_dB / 10))
-        noise = np.sqrt(noise_power/2) * (np.random.randn(noise_length) + 1j * np.random.randn(noise_length))
+@app.route('/api/execute_node', methods=['POST'])
+def execute_node():
+    """Execute a single node's code and return output"""
+    try:
+        data = request.json
+        node_id = data.get('node_id')
+        code = data.get('code', '')
+        workflow_id = data.get('workflow_id', 'default')
+        input_data = data.get('input_data', {})
+        
+        # Initialize workflow context if not exists
+        if workflow_id not in execution_contexts:
+            execution_contexts[workflow_id] = {}
+        
+        context = execution_contexts[workflow_id]
+        
+        # Add input data to context
+        for key, value in input_data.items():
+            context[key] = value
+        
+        # Capture stdout
+        old_stdout = sys.stdout
+        sys.stdout = captured_output = StringIO()
+        
+        # Capture matplotlib plots
+        plt.clf()
+        plt.close('all')
+        
+        try:
+            # Execute code in context
+            exec(code, context)
+            
+            # Get output
+            output_text = captured_output.getvalue()
+            
+            # Check if matplotlib figure exists
+            plot_data = None
+            if plt.get_fignums():
+                buf = BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                buf.seek(0)
+                plot_data = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close('all')
+            
+            # Get variables created (excluding built-ins and imports)
+            output_vars = {}
+            for key, value in context.items():
+                if not key.startswith('_') and key not in ['__builtins__', '__name__', '__doc__']:
+                    try:
+                        # Try to convert to string representation
+                        if hasattr(value, '__module__'):
+                            # Skip modules and functions
+                            if value.__module__ in ['builtins', 'matplotlib', 'pandas', 'yfinance', 'datetime']:
+                                continue
+                        
+                        str_value = str(value)
+                        # Limit string length
+                        if len(str_value) > 1000:
+                            str_value = str_value[:1000] + '...'
+                        output_vars[key] = str_value
+                    except:
+                        pass
+            
+            return jsonify({
+                'success': True,
+                'output': output_text,
+                'variables': output_vars,
+                'plot': plot_data,
+                'node_id': node_id
+            })
+            
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'traceback': error_trace,
+                'node_id': node_id
+            })
+        finally:
+            sys.stdout = old_stdout
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
+@app.route('/api/save_workflow', methods=['POST'])
+def save_workflow():
+    """Save workflow configuration"""
+    try:
+        data = request.json
+        workflow_id = data.get('workflow_id', 'default')
+        workflows[workflow_id] = data
+        return jsonify({'success': True, 'workflow_id': workflow_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-        transmitted_signal = ofdm_transmitter(data, fft_size, cyclic_prefix)
-        encrypted_signal = encrypt_signal(transmitted_signal, key)
-        noisy_encrypted_signal = add_awgn_noise_to_encrypted_signal(encrypted_signal, snr_dB)
-        decrypted_noisy_signal = decrypt_noisy_signal(noisy_encrypted_signal, key)
-        received_data = ofdm_receiver(decrypted_noisy_signal, fft_size, cyclic_prefix,data)
+@app.route('/api/load_workflow/<workflow_id>', methods=['GET'])
+def load_workflow(workflow_id):
+    """Load workflow configuration"""
+    try:
+        if workflow_id in workflows:
+            return jsonify({'success': True, 'workflow': workflows[workflow_id]})
+        else:
+            return jsonify({'success': False, 'error': 'Workflow not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-        # Plotting the signals and data
-        fig, axs = plt.subplots(4, 2, figsize=(10, 10))
-        fig.suptitle('OFDM Signal Transmission')
+@app.route('/api/reset_context', methods=['POST'])
+def reset_context():
+    """Reset execution context"""
+    try:
+        data = request.json
+        workflow_id = data.get('workflow_id', 'default')
+        if workflow_id in execution_contexts:
+            del execution_contexts[workflow_id]
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-        # Transmitted Signal
-        axs[0, 0].plot(np.real(transmitted_signal), label='Real')
-        axs[0, 0].plot(np.imag(transmitted_signal), label='Imaginary')
-        axs[0, 0].set_title('Transmitted Signal')
-        axs[0, 0].legend()
+@app.route('/api/execute_workflow', methods=['POST'])
+def execute_workflow():
+    """Execute entire workflow in order"""
+    try:
+        data = request.json
+        workflow_id = data.get('workflow_id', 'default')
+        nodes = data.get('nodes', [])
+        edges = data.get('edges', [])
+        
+        # Reset context
+        execution_contexts[workflow_id] = {}
+        
+        # Build execution order using topological sort
+        execution_order = topological_sort(nodes, edges)
+        
+        results = []
+        for node_id in execution_order:
+            node = next((n for n in nodes if n['id'] == node_id), None)
+            if node:
+                # Get input data from connected nodes
+                input_data = {}
+                for edge in edges:
+                    if edge['target'] == node_id:
+                        # Input from source node
+                        source_result = next((r for r in results if r['node_id'] == edge['source']), None)
+                        if source_result:
+                            input_data.update(source_result.get('variables', {}))
+                
+                # Execute node
+                result = execute_node_internal(node_id, node.get('data', {}).get('code', ''), workflow_id, input_data)
+                results.append(result)
+                
+                if not result['success']:
+                    break
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
-        # Encrypted Signal
-        axs[0, 1].plot(np.real(decrypt_signal(encrypted_signal, key)), label='Real')
-        axs[0, 1].plot(np.imag(decrypt_signal(encrypted_signal, key)), label='Imaginary')
-        axs[0, 1].set_title('Encrypted Signal')
-        axs[0, 1].legend()
+def execute_node_internal(node_id, code, workflow_id, input_data):
+    """Internal function to execute a node"""
+    try:
+        # Initialize workflow context if not exists
+        if workflow_id not in execution_contexts:
+            execution_contexts[workflow_id] = {}
+        
+        context = execution_contexts[workflow_id]
+        
+        # Add input data to context
+        for key, value in input_data.items():
+            context[key] = value
+        
+        # Capture stdout
+        old_stdout = sys.stdout
+        sys.stdout = captured_output = StringIO()
+        
+        # Capture matplotlib plots
+        plt.clf()
+        plt.close('all')
+        
+        try:
+            # Execute code in context
+            exec(code, context)
+            
+            # Get output
+            output_text = captured_output.getvalue()
+            
+            # Check if matplotlib figure exists
+            plot_data = None
+            if plt.get_fignums():
+                buf = BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                buf.seek(0)
+                plot_data = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close('all')
+            
+            # Get variables created
+            output_vars = {}
+            for key, value in context.items():
+                if not key.startswith('_') and key not in ['__builtins__', '__name__', '__doc__']:
+                    try:
+                        if hasattr(value, '__module__'):
+                            if value.__module__ in ['builtins', 'matplotlib', 'pandas', 'yfinance', 'datetime']:
+                                continue
+                        
+                        str_value = str(value)
+                        if len(str_value) > 1000:
+                            str_value = str_value[:1000] + '...'
+                        output_vars[key] = str_value
+                    except:
+                        pass
+            
+            return {
+                'success': True,
+                'output': output_text,
+                'variables': output_vars,
+                'plot': plot_data,
+                'node_id': node_id
+            }
+            
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            return {
+                'success': False,
+                'error': str(e),
+                'traceback': error_trace,
+                'node_id': node_id
+            }
+        finally:
+            sys.stdout = old_stdout
+            
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'node_id': node_id
+        }
 
-        # Noisy Encrypted Signal
-        axs[1, 0].plot(np.real(decrypt_signal(noisy_encrypted_signal, key)), label='Real')
-        axs[1, 0].plot(np.imag(decrypt_signal(noisy_encrypted_signal, key)), label='Imaginary')
-        axs[1, 0].set_title('Noisy Encrypted Signal')
-        axs[1, 0].legend()
-
-        # Decrypted Noisy Signal
-        axs[1, 1].plot(np.real(decrypted_noisy_signal), label='Real')
-        axs[1, 1].plot(np.imag(decrypted_noisy_signal), label='Imaginary')
-        axs[1, 1].set_title('Decrypted Noisy Signal')
-        axs[1, 1].legend()
-
-        # Received Data
-        axs[2, 0].stem(received_data)
-        axs[2, 0].set_title('Received Data')
-
-        # Original Data
-        axs[2, 1].stem(data)
-        axs[2, 1].set_title('Original Data')
-
-        # AWGN Noise
-        axs[3, 0].plot(np.real(noise), label='Real')
-        axs[3, 0].plot(np.imag(noise), label='Imaginary')
-        axs[3, 0].set_title('AWGN Noise')
-        axs[3, 0].legend()
-
-
-        plot_path = 'static/plot.png'
-        plt.tight_layout()
-        plt.savefig(plot_path)
-        plt.close()
-
-        return render_template('result.html',
-                               plot_path=plot_path,
-                               transmitted_signal=transmitted_signal,
-                               noisy_signal=noisy_encrypted_signal,
-                               noise=noise,
-                               encrypted_signal=encrypted_signal,
-                               decrypted_signal=decrypted_noisy_signal,
-                               received_data=received_data,
-                               transmitted_data=data)
-
-    return render_template('index.html')
+def topological_sort(nodes, edges):
+    """Topological sort for node execution order"""
+    from collections import defaultdict, deque
+    
+    # Build adjacency list
+    graph = defaultdict(list)
+    in_degree = {node['id']: 0 for node in nodes}
+    
+    for edge in edges:
+        graph[edge['source']].append(edge['target'])
+        in_degree[edge['target']] = in_degree.get(edge['target'], 0) + 1
+    
+    # Find nodes with no incoming edges
+    queue = deque([node_id for node_id, degree in in_degree.items() if degree == 0])
+    result = []
+    
+    while queue:
+        node_id = queue.popleft()
+        result.append(node_id)
+        
+        for neighbor in graph[node_id]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+    
+    return result
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
